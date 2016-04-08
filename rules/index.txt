@@ -1,0 +1,49 @@
+#Every active rule goes in here. Rules with higher precedence go at bottom.
+#Each (non-comment) entry must fit in 81 characters.
+
+#Each entry is a tranform symbol followed by a filename (assumed to have the .png suffix)
+#The valid tranform symbols are: !@$%
+# ! is for things which only need rotations matched (perhaps because they have reflectional symmetry like the ! symbol)
+# @ is for things which need all orientations matched (perhaps because no symmetry)
+# $ is for things which only need the given orientation plus a reflection about the y-axis checked
+# % is for things which only need the given orientation checked because they're just so symmetrical.
+
+#Blank lines separate rules into groups. All the rules in a group are applied simultaneously.
+#Rules which attempt to edit the same space (even if to the same value!) will conflict and neither will run.
+#This is why transform symbols are critical.
+#Checking all 8 orientations on a symmetrical rule will result in 8 matches, they conflict, and nothing runs.
+
+!virus
+
+$bomb1
+$bomb2
+$bomb3
+
+#Man, I tried a ton of rules for circuits. "Gliders" is by far the most potent/compact, and is enabled by default.
+#bothNs is an unholy mess, but can also make AND gates (my potency criterion)
+#Ts can make AND gates (that look like guns!), but it's almost as large as bothNs (much cleaner though)
+#CwNs is nice in that it gives you immense control of how the connections flow, but I thought through how to build an AND gate and it would be obscenely large, if it's possible at all.
+#CwHubs is a small, very easy to understand rule set, good perhaps aor starting out. It can build XOR gates (as can all these rulesets), but not AND gates. Not frame-perfect ones, at least.
+
+#If you want a nice learning challenge, enable the CwHubs ruleset, mess around a bit, and try to build an XOR gate. Any amount of latency is allowed, but the output must be perfect down to the frame.
+
+#Designs for each of these rulesets are in the appropriately named folder. Note also that many are marked as '!' when they have '@'-style symmetry. This gives them a preferred chirality (left or right handedness), which cuts down on interference between wires.
+### bothNs
+#@knightOn
+#@knightOff
+
+### CwNs
+#!knightOn
+#!knightOff
+
+### CwHubs
+#!hubOn
+#!hubOff
+
+### Ts
+#!Ton
+#!Toff
+
+### gliders
+!gliderOn
+!gliderOff
