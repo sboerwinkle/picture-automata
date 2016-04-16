@@ -2,22 +2,52 @@
 #Each (non-comment) entry must fit in 81 characters.
 
 #Each entry is a tranform symbol followed by a filename (assumed to have the .png suffix)
-#The valid tranform symbols are: !@$%
+#The valid tranform symbols are: !@$%><
 # ! is for things which only need rotations matched (perhaps because they have reflectional symmetry like the ! symbol)
 # @ is for things which need all orientations matched (perhaps because no symmetry)
 # $ is for things which only need the given orientation plus a reflection about the y-axis checked
 # % is for things which only need the given orientation checked because they're just so symmetrical.
+# > is for rules to be applied in the direction of any pressed keys
+# < is for rules to be applied in the direction of any released keys
 
 #Blank lines separate rules into groups. All the rules in a group are applied simultaneously.
 #Rules which attempt to edit the same space (even if to the same value!) will conflict and neither will run.
 #This is why transform symbols are critical.
 #Checking all 8 orientations on a symmetrical rule will result in 8 matches, they conflict, and nothing runs.
 
+### Lowest priority: things that don't need to affect other things.
+## gliders (Circuitry)
+!gliderOn
+!gliderOff
 !virus
 
 $bomb1
 $bomb2
 $bomb3
+
+$sporeFlip
+$guyFlip
+
+$sporeClimb
+$guyMove
+
+$guyClimbDown
+
+$sporeWalk
+$guyClimb
+
+>controlOn
+<controlOff
+
+$sporeFall
+$guyFall
+
+#Bullets are really high priority so nothing ever stops them
+!bulletHit
+
+!casingDestroy
+
+!bulletMove
 
 #Man, I tried a ton of rules for circuits. "Gliders" is by far the most potent/compact, and is enabled by default.
 #bothNs is an unholy mess, but can also make AND gates (my potency criterion)
@@ -43,7 +73,3 @@ $bomb3
 ### Ts
 #!Ton
 #!Toff
-
-### gliders
-!gliderOn
-!gliderOff

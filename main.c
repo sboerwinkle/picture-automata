@@ -32,7 +32,7 @@ static char simStep = 0;
 static int delay = 3;
 
 char keys[numKeys] = {0};
-static int keyBindings[numKeys] = {SDLK_RIGHT, SDLK_UP, SDLK_LEFT, SDLK_DOWN, SDLK_SPACE};
+static int keyBindings[numKeys] = {SDLK_UP, SDLK_LEFT, SDLK_DOWN, SDLK_RIGHT, SDLK_SPACE};
 static int values[4] = {0, 0x55, 0xaa, 0xff};
 
 static void save(char *file) {
@@ -55,7 +55,7 @@ static void open(char *file) {
 	int w = imlib_image_get_width();
 	int h = imlib_image_get_height();
 	if (w > width || h > height) {
-		//free(data);
+		free(data);
 		imlib_free_image();
 		puts("Refusing to load image.");
 		printf("Image dimensions of (%d, %d) exceed window dimensions of (%d, %d)\n", w, h, width, height);
@@ -65,13 +65,13 @@ static void open(char *file) {
 	uint8_t *b = board;
 	for (i = 0; i < h; i++) {
 		for (j = 0; j < w; j++) {
-			uint8_t item = convertColor(data[i*w+j]);
-			if (item >= numColors) item = 0;
+			int item = convertColor(data[i*w+j]);
+			if (item < 0) item = 0;
 			b[j] = item;
 		}
 		b += width;
 	}
-	//free(data);
+	free(data);
 	imlib_free_image();
 }
 
@@ -211,6 +211,12 @@ static int keyAction(int code, char pressed)
 			save("save.png");
 			puts("Done.");
 			return -100;
+		case SDLK_o:
+			puts("Reloading ruleset...");
+			freeRules();
+			loadRules();
+			puts("Done.");
+			return -100;
 		default:
 			return -100;
 	}
@@ -300,6 +306,17 @@ int main(int argc, char** argv)
 		}
 
 		if (!simPaused || simStep) {
+			int numDn = 0;
+			int i;
+			for (i = 0; i < 4; i++) {
+				if (keys[i]) {
+					keysDn[numDn++] = i;
+				} else {
+					keysUp[i-numDn] = i;
+				}
+			}
+			keysDn[numDn] = -1; // The lists are -1 terminated
+			keysUp[4-numDn] = -1;
 			doStep();
 			simStep = 0;
 		}

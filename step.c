@@ -6,16 +6,24 @@
 #include "step.h"
 #include "transforms.h"
 
+typedef struct writePair {
+	int loc;
+	uint8_t color;
+} writePair;
+
 typedef struct action {
 	int len;
-	int *locs;
-	uint8_t *colors;
+	writePair *pairs;
 } action;
 
 rule *firstRule = NULL;
 
 static action *actions = NULL;
-static int numActions = 0, maxActions = 0;
+static int checkedActions = 0, numActions = 0, maxActions = 0;
+
+static int ptToInt(pt* p, int orient) {
+	return xMult[orient]*p->x + yMult[orient]*p->y;
+}
 
 static void registerAction(rule *r, int ix, int orient) {
 	if (numActions == maxActions) {
@@ -23,44 +31,82 @@ static void registerAction(rule *r, int ix, int orient) {
 		actions = realloc(actions, sizeof(action)*maxActions);
 	}
 	action *n = actions + numActions++;
-	n->len = r->Wlen;
-	n->locs = malloc(sizeof(int) * n->len);
-	//TODO: Make this a new array
-	n->colors = r->Wcolors;
+	//n->len = r->Wlen;
+	n->len = r->totWlen;
+	n->pairs = malloc(sizeof(writePair) * n->len);
 	int i;
+	//Populate locs
+	for (i = r->Wlen-1; i >= 0; i--) {
+		n->pairs[i].loc = ix + xMult[orient]*r->Wpts[i].x + yMult[orient]*r->Wpts[i].y;
+		n->pairs[i].color = r->Wcolors[i];
+	}
+	pattern *p;
+	int offset = r->Wlen;
+	//populate more locs
+	for (p = r->patterns; p; p = p->next) {
+		uint8_t color = board[ix + ptToInt(p->Rpts, orient)];
+		for (i = p->Wlen-1; i >= 0; i--) {
+			n->pairs[offset+i].loc = ix + ptToInt(p->Wpts+i, orient);
+			n->pairs[offset+i].color = color;
+		}
+		offset += p->Wlen;
+	}
 	uint8_t *loc;
+	char marker = 1; // This kind of marker means I'm good to apply
 	for (i = n->len - 1; i >= 0; i--) {
-		n->locs[i] = ix + xMult[orient]*r->Wpts[i].x + yMult[orient]*r->Wpts[i].y;
-		loc = changeBoard + n->locs[i];
-		if (*loc != 2) (*loc)++;
+		loc = changeBoard + n->pairs[i].loc;
+		if (*loc) {
+			if (*loc == 128) {
+				free(n->pairs);
+				numActions--;
+				return;
+			}
+			marker = 2; // This kind of marker means I am not.
+		}
+	}
+	for (i = n->len - 1; i >= 0; i--) {
+		changeBoard[n->pairs[i].loc] = marker;
+	}
+}
+
+static void checkActions() {
+	action *me;
+	int i, ix;
+	while (checkedActions < numActions) {
+		me = actions + checkedActions;
+		for (i = me->len-1; i >= 0; i--) {
+			ix = me->pairs[i].loc;
+			if (changeBoard[ix] != 1) break;
+			changeBoard[ix] = 128;
+		}
+		if (i >= 0) {
+			for (i = me->len-1; i >= 0; i--) {
+				changeBoard[me->pairs[i].loc] = 0;
+			}
+			free(me->pairs);
+			*me = actions[--numActions];
+		} else {
+			checkedActions++;
+		}
 	}
 }
 
 static void runAllActions()
 {
 	int i, j, ix;
-	char flag;
 	action *me;
-	for (i = numActions - 1; i >= 0; i--) {
+	for (i = 0; i < numActions; i++) {
 		me = actions + i;
-
-		flag = 1;
 		for (j = me->len-1; j >= 0; j--) {
-			ix = me->locs[j];
-			if (changeBoard[ix] != 1) flag = 0;
+			ix = me->pairs[j].loc;
 			changeBoard[ix] = 0;
+			board[ix] = me->pairs[j].color;
+			updatePixel(ix);
 		}
-		if (flag) {
-			for (j = me->len-1; j >= 0; j--) {
-				ix = me->locs[j];
-				board[ix] = me->colors[j];
-				updatePixel(ix);
-			}
-		}
-		//TODO: Free colors
-		free(me->locs);
+		free(me->pairs);
 	}
 	numActions = 0;
+	checkedActions = 0;
 }
 
 static void tryOrientation(rule *r, int ix, int orient) {
@@ -70,19 +116,23 @@ static void tryOrientation(rule *r, int ix, int orient) {
 	for (i = 0; i < numColors; i++) {
 		lim += r->colorCounts[i];
 		for (; j < lim; j++) {
-			if (b[
-				xMult[orient] * r->Rpts[j].x +
-				yMult[orient] * r->Rpts[j].y
-			     ] != i) return;
+			if (b[ptToInt(r->Rpts+j, orient)] != i) return;
+		}
+	}
+	pattern *p;
+	for (p = r->patterns; p; p = p->next) {
+		uint8_t color = b[ptToInt(p->Rpts, orient)];
+		for (i = p->Rlen-1; i > 0; i--) {
+			if (color != b[ptToInt(p->Rpts+i, orient)]) return;
 		}
 	}
 	registerAction(r, ix, orient);
 }
 
-static void tryRule(rule *r, int ix, int x, int y) {
+static void tryRule(rule *r, int ix, pt *p) {
 	//Up, Right, Down, Left
 	int space[4] = {ix/width, width-1-ix%width, height-1-ix/width, ix%width};
-	int needed[4] = {y, r->w-1-x, r->h-1-y, x};
+	int needed[4] = {p->y, r->w-1-p->x, r->h-1-p->y, p->x};
 	int i, j;
 	int *transform;
 	for (transform = r->transforms; (i=*transform) != -1; transform++) {
@@ -100,12 +150,11 @@ static void tryRule(rule *r, int ix, int x, int y) {
 		//And bail if any failed.
 		if (j >= 0) continue;
 		//Now check each of the spaces in the pattern.
-		tryOrientation(r, ix-xMult[i]*x-yMult[i]*y, i);
+		tryOrientation(r, ix-ptToInt(p, i), i);
 	}
 }
 
-void doStep()
-{
+void doStep() {
 	rule *r;
 	int i;
 	for (r = firstRule; r; r = r->next) {
@@ -130,10 +179,11 @@ void doStep()
 			}
 			continue;
 		}
-		pt offset = r->Rpts[start];
+		pt *offset = r->Rpts + start;
 		for (i = colorStarts[bestColor]; i >= 0; i = nextBoard[i]) {
-			tryRule(r, i, offset.x, offset.y);
+			tryRule(r, i, offset);
 		}
-		if (r->apply) runAllActions(); // If this isn't the case, it will be delayed and applied with others.
+		if (r->endOfGroup) checkActions();
 	}
+	runAllActions();
 }
